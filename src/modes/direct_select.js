@@ -91,8 +91,13 @@ DirectSelect.pathsToCoordinates = function (featureId, paths) {
 };
 
 DirectSelect.onFeature = function (state, e) {
-  if (state.selectedCoordPaths.length === 0) this.startDragging(state, e);
-  else this.stopDragging(state);
+  // if (state.selectedCoordPaths.length === 0) this.startDragging(state, e);
+  // else this.stopDragging(state);
+  if (state.selectedCoordPaths.length > 0) {
+    state.selectedCoordPaths = [];
+    this.clearSelectedCoordinates();
+  }
+  this.startDragging(state, e);
 };
 
 DirectSelect.dragFeature = function (state, e, delta) {
