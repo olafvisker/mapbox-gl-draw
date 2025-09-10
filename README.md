@@ -4,6 +4,7 @@ Changes in this fork relative to `@mapbox/mapbox-gl-draw`:
 
 - **DirectSelect & SimpleSelect**: Fire `draw.update.live` while dragging vertices or features.
 - **DrawLineString & DrawPolygon**: Fire `draw.update.live` during vertex movement.
+- **StaticMode**: Added a static mode that displays data stored in Draw but disabled all user feature interaction.
 
 **Merged upstream pull requests that fixed the following:**
 

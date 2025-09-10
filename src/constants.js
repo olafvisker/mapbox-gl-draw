@@ -49,6 +49,7 @@ export const modes = {
   DRAW_POINT: "draw_point",
   SIMPLE_SELECT: "simple_select",
   DIRECT_SELECT: "direct_select",
+  STATIC_MODE: "static_mode",
 };
 
 export const events = {
