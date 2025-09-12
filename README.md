@@ -7,7 +7,7 @@ Changes in this fork relative to `@mapbox/mapbox-gl-draw`:
 - **StaticMode**: Added a static mode that displays data stored in Draw but disabled all user feature interaction.
 - **DirectSelect**: Dragging a feature now automatically deselects any previously selected vertex, enabling immediate movement of the entire feature without requiring manual vertex deselection.
 - **New Modes**: Added draw_rectangle and draw_circle modes for drawing rectangles and geodesic circles. Deleting a vertex from the circle deletes the entire circle. Deleting a vertex from a rectangle turns it into a normal polygon.
-- **DirectSelect & SimpleSelect**: Updated to account for proper circle and rectangle editing.
+- **DirectSelect & SimpleSelect**: Updated to account for proper circle and rectangle editing (currently monkey patched, should do proper integration).
 - Updated debug/index.html to account for new modes.
 
 **Merged upstream pull requests that fixed the following:**
