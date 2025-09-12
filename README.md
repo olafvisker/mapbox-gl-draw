@@ -6,6 +6,9 @@ Changes in this fork relative to `@mapbox/mapbox-gl-draw`:
 - **DrawLineString & DrawPolygon**: Fire `draw.update.live` during vertex movement.
 - **StaticMode**: Added a static mode that displays data stored in Draw but disabled all user feature interaction.
 - **DirectSelect**: Dragging a feature now automatically deselects any previously selected vertex, enabling immediate movement of the entire feature without requiring manual vertex deselection.
+- **New Modes**: Added draw_rectangle and draw_circle modes for drawing rectangles and geodesic circles. Deleting a vertex from the circle deletes the entire circle. Deleting a vertex from a rectangle turns it into a normal polygon.
+- **DirectSelect & SimpleSelect**: Updated to account for proper circle and rectangle editing.
+- Updated debug/index.html to account for new modes.
 
 **Merged upstream pull requests that fixed the following:**
 
@@ -17,6 +20,11 @@ Changes in this fork relative to `@mapbox/mapbox-gl-draw`:
 - [#1321](https://github.com/mapbox/mapbox-gl-draw/pull/1321) Remove the flickering effect when clicking on features
 - [#1428](https://github.com/mapbox/mapbox-gl-draw/pull/1428) Preferring vertices over midpoints
 - [#1433](https://github.com/mapbox/mapbox-gl-draw/pull/1433) Fix midpoints locations
+
+**Added dependencies**
+
+- @turf/circle
+- @turf/distance
 
 ---
 
