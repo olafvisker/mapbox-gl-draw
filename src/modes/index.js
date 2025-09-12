@@ -1,15 +1,19 @@
+import static_mode from "./static_mode.js";
 import simple_select from "./simple_select.js";
 import direct_select from "./direct_select.js";
-import static_mode from "./static_mode.js";
 import draw_point from "./draw_point.js";
 import draw_polygon from "./draw_polygon.js";
 import draw_line_string from "./draw_line_string.js";
+import draw_rectangle from "./draw_rectangle.js";
+import draw_circle from "./draw_circle.js";
 
 export default {
+  static_mode,
   simple_select,
   direct_select,
-  static_mode,
   draw_point,
   draw_polygon,
   draw_line_string,
+  draw_rectangle,
+  draw_circle,
 };

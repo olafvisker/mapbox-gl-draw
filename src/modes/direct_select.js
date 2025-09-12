@@ -10,6 +10,7 @@ import constrainFeatureMovement from "../lib/constrain_feature_movement.js";
 import doubleClickZoom from "../lib/double_click_zoom.js";
 import * as Constants from "../constants.js";
 import moveFeatures from "../lib/move_features.js";
+import { circle } from "@turf/circle";
 
 const isVertex = isOfMetaType(Constants.meta.VERTEX);
 const isMidpoint = isOfMetaType(Constants.meta.MIDPOINT);
@@ -296,6 +297,185 @@ DirectSelect.onTouchEnd = DirectSelect.onMouseUp = function (state) {
     this.fireUpdate();
   }
   this.stopDragging(state);
+};
+
+// Unified dragVertex
+const originalDragVertex = DirectSelect.dragVertex;
+DirectSelect.dragVertex = function (state, e, delta) {
+  const feature = state.feature;
+  const isRectangle = feature?.properties?.isRectangle;
+  const isCircle = feature?.properties?.isCircle;
+
+  const selectedCoords = state.selectedCoordPaths.map((coord_path) =>
+    feature.getCoordinate(coord_path)
+  );
+
+  // --- RECTANGLE VERTEX DRAG ---
+  if (isRectangle && state.selectedCoordPaths.length === 1) {
+    const path = state.selectedCoordPaths[0];
+
+    if (path === "0.0") {
+      feature.updateCoordinate(
+        "0.1",
+        feature.getCoordinate("0.1")[0],
+        selectedCoords[0][1]
+      );
+      feature.updateCoordinate(
+        "0.3",
+        selectedCoords[0][0],
+        feature.getCoordinate("0.3")[1]
+      );
+    } else if (path === "0.1") {
+      feature.updateCoordinate(
+        "0.0",
+        feature.getCoordinate("0.0")[0],
+        selectedCoords[0][1]
+      );
+      feature.updateCoordinate(
+        "0.2",
+        selectedCoords[0][0],
+        feature.getCoordinate("0.2")[1]
+      );
+    } else if (path === "0.2") {
+      feature.updateCoordinate(
+        "0.3",
+        feature.getCoordinate("0.3")[0],
+        selectedCoords[0][1]
+      );
+      feature.updateCoordinate(
+        "0.1",
+        selectedCoords[0][0],
+        feature.getCoordinate("0.1")[1]
+      );
+    } else if (path === "0.3") {
+      feature.updateCoordinate(
+        "0.2",
+        feature.getCoordinate("0.2")[0],
+        selectedCoords[0][1]
+      );
+      feature.updateCoordinate(
+        "0.0",
+        selectedCoords[0][0],
+        feature.getCoordinate("0.0")[1]
+      );
+    }
+
+    originalDragVertex.call(this, state, e, delta);
+    return;
+  }
+
+  // --- CIRCLE RESIZE ---
+  if (isCircle && state.selectedCoordPaths.length === 1) {
+    const center = feature.properties.center;
+    if (!center) return;
+
+    const mouse = e.lngLat;
+    const dx = mouse.lng - center[0];
+    const dy = mouse.lat - center[1];
+    const newRadius = Math.sqrt(dx * dx + dy * dy);
+
+    const newCircle = circle(center, newRadius, {
+      steps: 64,
+      units: "degrees",
+      properties: { isCircle: true, center },
+    });
+
+    feature.setCoordinates(newCircle.geometry.coordinates);
+    this.fireLiveUpdate();
+    return;
+  }
+
+  // fallback
+  originalDragVertex.call(this, state, e, delta);
+};
+
+// Unified dragFeature
+DirectSelect.dragFeature = function (state, e, delta) {
+  const feature = state.feature;
+  const isCircle = feature?.properties?.isCircle;
+
+  moveFeatures([feature], delta);
+
+  if (isCircle && feature.properties.center) {
+    feature.properties.center = [
+      feature.properties.center[0] + delta.lng,
+      feature.properties.center[1] + delta.lat,
+    ];
+  }
+
+  state.dragMoveLocation = e.lngLat;
+  this.fireLiveUpdate();
+};
+import createVertex from "../lib/create_vertex.js";
+
+const originalDeleteVertex = DirectSelect.deleteVertex;
+DirectSelect.deleteVertex = function (state) {
+  const feature = state.feature;
+  const isCircle = feature?.properties?.isCircle;
+
+  if (isCircle && state.selectedCoordPaths.includes("0.0")) {
+    // Remove the circle feature entirely
+    this.map.fire("draw.delete", { features: [feature] });
+    this.deleteFeature(feature.id);
+    state.feature = null;
+    state.selectedCoordPaths = [];
+    this.fireLiveUpdate();
+    return;
+  }
+
+  // fallback for other features
+  originalDeleteVertex.call(this, state);
+};
+
+const originalOnTrash = DirectSelect.onTrash;
+DirectSelect.onTrash = function (state) {
+  const feature = state.feature;
+
+  // If the feature is a circle, delete it entirely
+  if (feature?.properties?.isCircle) {
+    this.deleteFeature([state.featureId]);
+    this.changeMode(Constants.modes.SIMPLE_SELECT, {});
+    return;
+  }
+
+  // Otherwise, fallback to the original onTrash behavior
+  originalOnTrash.call(this, state);
+};
+
+// Unified toDisplayFeatures
+DirectSelect.toDisplayFeatures = function (state, geojson, push) {
+  const feature = state.feature;
+  const isActive = state.featureId === geojson.properties.id;
+  geojson.properties.active = isActive
+    ? Constants.activeStates.ACTIVE
+    : Constants.activeStates.INACTIVE;
+
+  if (isActive) {
+    const isRectangle = feature?.properties?.isRectangle;
+    const isCircle = feature?.properties?.isCircle;
+
+    if (isRectangle) {
+      createSupplementaryPoints(geojson, {
+        map: this.map,
+        midpoints: false,
+        selectedPaths: state.selectedCoordPaths,
+      }).forEach(push);
+    }
+
+    if (isCircle) {
+      const handle = feature.getCoordinate("0.0");
+      const vertex = createVertex(
+        `${geojson.id}-handle`,
+        handle,
+        `0.0`,
+        state.selectedCoordPaths.length > 0
+      );
+      push(vertex);
+    }
+  }
+
+  push(geojson);
+  this.fireActionable(state);
 };
 
 export default DirectSelect;

@@ -1,9 +1,10 @@
-import * as Constants from './constants.js';
+import * as Constants from "./constants.js";
 
 export default function render() {
   // eslint-disable-next-line no-invalid-this
   const store = this;
-  const mapExists = store.ctx.map && store.ctx.map.getSource(Constants.source) !== undefined;
+  const mapExists =
+    store.ctx.map && store.ctx.map.getSource(Constants.source) !== undefined;
   if (!mapExists) return cleanup();
 
   const mode = store.ctx.events.currentModeName();
@@ -16,7 +17,7 @@ export default function render() {
   store.source = [];
 
   const changed = lastCount !== store.source.length || newIds.length > 0;
-  newIds.forEach(id => renderFeature(id));
+  newIds.forEach((id) => renderFeature(id));
 
   function renderFeature(id) {
     const feature = store.get(id);
@@ -30,7 +31,7 @@ export default function render() {
   if (changed) {
     store.ctx.map.getSource(Constants.source).setData({
       type: Constants.geojsonTypes.FEATURE_COLLECTION,
-      features: store.source
+      features: store.source,
     });
   }
 

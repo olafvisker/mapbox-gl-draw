@@ -424,4 +424,33 @@ SimpleSelect.onUncombineFeatures = function () {
   this.fireActionable();
 };
 
+// --- PATCH SimpleSelect for circles ---
+
+SimpleSelect.dragMove = function (state, e) {
+  state.dragMoving = true;
+  e.originalEvent.stopPropagation();
+
+  const delta = {
+    lng: e.lngLat.lng - state.dragMoveLocation.lng,
+    lat: e.lngLat.lat - state.dragMoveLocation.lat,
+  };
+
+  const selected = this.getSelected();
+  moveFeatures(selected, delta);
+
+  // Update circle centers
+  selected.forEach((feature) => {
+    if (feature.properties?.isCircle && feature.properties.center) {
+      feature.properties.center = [
+        feature.properties.center[0] + delta.lng,
+        feature.properties.center[1] + delta.lat,
+      ];
+    }
+  });
+
+  this.fireLiveUpdate();
+
+  state.dragMoveLocation = e.lngLat;
+};
+
 export default SimpleSelect;

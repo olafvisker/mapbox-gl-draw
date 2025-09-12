@@ -7,15 +7,15 @@ StaticMode.onSetup = function () {
   return {};
 };
 
-StaticMode.onTouchStart = StaticMode.onMouseDown = function (state, e) {
+StaticMode.onTouchStart = StaticMode.onMouseDown = function () {
   this.updateUIClasses({ mouse: Constants.cursors.NONE });
 };
 
-StaticMode.onTouchEnd = StaticMode.onMouseUp = function (state) {
+StaticMode.onTouchEnd = StaticMode.onMouseUp = function () {
   this.updateUIClasses({ mouse: Constants.cursors.NONE });
 };
 
-StaticMode.onMouseMove = function (state, e) {
+StaticMode.onMouseMove = function () {
   this.updateUIClasses({ mouse: Constants.cursors.NONE });
 };
 

@@ -44,6 +44,8 @@ export const geojsonTypes = {
 };
 
 export const modes = {
+  DRAW_CIRCLE: "draw_circle",
+  DRAW_RECTANGLE: "draw_rectangle",
   DRAW_LINE_STRING: "draw_line_string",
   DRAW_POLYGON: "draw_polygon",
   DRAW_POINT: "draw_point",
