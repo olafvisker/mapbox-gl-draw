@@ -435,22 +435,16 @@ SimpleSelect.dragMove = function (state, e) {
     lat: e.lngLat.lat - state.dragMoveLocation.lat,
   };
 
-  const selected = this.getSelected();
-  moveFeatures(selected, delta);
+  moveFeatures(this.getSelected(), delta);
 
-  // Update circle centers
-  selected.forEach((feature) => {
-    if (feature.properties?.isCircle && feature.properties.center) {
-      feature.properties.center = [
-        feature.properties.center[0] + delta.lng,
-        feature.properties.center[1] + delta.lat,
-      ];
-    }
-  });
-
-  this.fireLiveUpdate();
+  this.getSelected()
+    .filter((feature) => feature.properties.isCircle)
+    .map((circle) => circle.properties.center)
+    .forEach((center) => {
+      center[0] += delta.lng;
+      center[1] += delta.lat;
+    });
 
   state.dragMoveLocation = e.lngLat;
 };
-
 export default SimpleSelect;

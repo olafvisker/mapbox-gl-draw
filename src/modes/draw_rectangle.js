@@ -145,7 +145,7 @@ DrawRectangle.onStop = function (state) {
 };
 
 DrawRectangle.toDisplayFeatures = function (state, geojson, display) {
-  const isActive = geojson.id === state.rectangle.id;
+  const isActive = geojson.properties.id === state.rectangle.id;
   geojson.properties.active = isActive
     ? Constants.activeStates.ACTIVE
     : Constants.activeStates.INACTIVE;
@@ -171,7 +171,6 @@ DrawRectangle.onTrash = function (state) {
     this.deleteFeature([state.startPointMarker.id], { silent: true });
   }
   this.deleteFeature([state.rectangle.id], { silent: true });
-  doubleClickZoom.enable(this);
   this.changeMode(Constants.modes.SIMPLE_SELECT);
 };
 

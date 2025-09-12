@@ -137,7 +137,7 @@ DrawCircle.onKeyUp = function (state, e) {
 };
 
 DrawCircle.toDisplayFeatures = function (state, geojson, display) {
-  const isActive = geojson.id === state.circle.id;
+  const isActive = geojson.properties.id === state.circle.id;
   geojson.properties.active = isActive
     ? Constants.activeStates.ACTIVE
     : Constants.activeStates.INACTIVE;
@@ -153,7 +153,6 @@ DrawCircle.onTrash = function (state) {
   if (state.centerMarker)
     this.deleteFeature([state.centerMarker.id], { silent: true });
   this.deleteFeature([state.circle.id], { silent: true });
-  doubleClickZoom.enable(this);
   this.changeMode(Constants.modes.SIMPLE_SELECT);
 };
 

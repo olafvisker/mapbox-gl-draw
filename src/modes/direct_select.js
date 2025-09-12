@@ -146,7 +146,6 @@ DirectSelect.clickActiveFeature = function (state) {
 };
 
 // EXTERNAL FUNCTIONS
-
 DirectSelect.onSetup = function (opts) {
   const featureId = opts.featureId;
   const feature = this.getFeature(featureId);
@@ -310,6 +309,26 @@ DirectSelect.dragVertex = function (state, e, delta) {
     feature.getCoordinate(coord_path)
   );
 
+  // --- CIRCLE RESIZE ---
+  if (isCircle && state.selectedCoordPaths.length === 1) {
+    const center = feature.properties.center;
+    if (!center) return;
+
+    const mouse = e.lngLat;
+    const dx = mouse.lng - center[0];
+    const dy = mouse.lat - center[1];
+    const newRadius = Math.sqrt(dx * dx + dy * dy);
+
+    const newCircle = circle(center, newRadius, {
+      steps: 64,
+      units: "degrees",
+      properties: { isCircle: true, center },
+    });
+
+    feature.setCoordinates(newCircle.geometry.coordinates);
+    this.fireLiveUpdate();
+  }
+
   // --- RECTANGLE VERTEX DRAG ---
   if (isRectangle && state.selectedCoordPaths.length === 1) {
     const path = state.selectedCoordPaths[0];
@@ -359,30 +378,6 @@ DirectSelect.dragVertex = function (state, e, delta) {
         feature.getCoordinate("0.0")[1]
       );
     }
-
-    originalDragVertex.call(this, state, e, delta);
-    return;
-  }
-
-  // --- CIRCLE RESIZE ---
-  if (isCircle && state.selectedCoordPaths.length === 1) {
-    const center = feature.properties.center;
-    if (!center) return;
-
-    const mouse = e.lngLat;
-    const dx = mouse.lng - center[0];
-    const dy = mouse.lat - center[1];
-    const newRadius = Math.sqrt(dx * dx + dy * dy);
-
-    const newCircle = circle(center, newRadius, {
-      steps: 64,
-      units: "degrees",
-      properties: { isCircle: true, center },
-    });
-
-    feature.setCoordinates(newCircle.geometry.coordinates);
-    this.fireLiveUpdate();
-    return;
   }
 
   // fallback
@@ -408,41 +403,26 @@ DirectSelect.dragFeature = function (state, e, delta) {
 };
 import createVertex from "../lib/create_vertex.js";
 
-const originalDeleteVertex = DirectSelect.deleteVertex;
-DirectSelect.deleteVertex = function (state) {
-  const feature = state.feature;
-  const isCircle = feature?.properties?.isCircle;
-
-  if (isCircle && state.selectedCoordPaths.includes("0.0")) {
-    // Remove the circle feature entirely
-    this.map.fire("draw.delete", { features: [feature] });
-    this.deleteFeature(feature.id);
-    state.feature = null;
-    state.selectedCoordPaths = [];
-    this.fireLiveUpdate();
-    return;
-  }
-
-  // fallback for other features
-  originalDeleteVertex.call(this, state);
-};
-
 const originalOnTrash = DirectSelect.onTrash;
 DirectSelect.onTrash = function (state) {
   const feature = state.feature;
-
+  const isCircle = feature?.properties?.isCircle;
+  const isRectangle = feature?.properties?.isRectangle;
   // If the feature is a circle, delete it entirely
-  if (feature?.properties?.isCircle) {
+  if (isCircle) {
     this.deleteFeature([state.featureId]);
     this.changeMode(Constants.modes.SIMPLE_SELECT, {});
     return;
+  }
+
+  if (isRectangle && state.selectedCoordPaths.length > 0) {
+    delete state.feature.properties.isRectangle;
   }
 
   // Otherwise, fallback to the original onTrash behavior
   originalOnTrash.call(this, state);
 };
 
-// Unified toDisplayFeatures
 DirectSelect.toDisplayFeatures = function (state, geojson, push) {
   const feature = state.feature;
   const isActive = state.featureId === geojson.properties.id;
@@ -450,31 +430,44 @@ DirectSelect.toDisplayFeatures = function (state, geojson, push) {
     ? Constants.activeStates.ACTIVE
     : Constants.activeStates.INACTIVE;
 
-  if (isActive) {
-    const isRectangle = feature?.properties?.isRectangle;
-    const isCircle = feature?.properties?.isCircle;
+  push(geojson); // always push main feature first
 
-    if (isRectangle) {
-      createSupplementaryPoints(geojson, {
-        map: this.map,
-        midpoints: false,
-        selectedPaths: state.selectedCoordPaths,
-      }).forEach(push);
-    }
-
-    if (isCircle) {
-      const handle = feature.getCoordinate("0.0");
-      const vertex = createVertex(
-        `${geojson.id}-handle`,
-        handle,
-        `0.0`,
-        state.selectedCoordPaths.length > 0
-      );
-      push(vertex);
-    }
+  if (!isActive) {
+    this.fireActionable(state);
+    return;
   }
 
-  push(geojson);
+  // Generic supplementary points (polygons, multi-polygons)
+  if (!feature?.properties?.isRectangle && !feature?.properties?.isCircle) {
+    createSupplementaryPoints(geojson, {
+      map: this.map,
+      midpoints: true,
+      selectedPaths: state.selectedCoordPaths,
+    }).forEach(push);
+  }
+
+  // Rectangle vertices (without midpoints)
+  if (feature?.properties?.isRectangle) {
+    createSupplementaryPoints(geojson, {
+      map: this.map,
+      midpoints: false,
+      selectedPaths: state.selectedCoordPaths,
+    }).forEach(push);
+  }
+
+  // Circle handle
+  if (feature?.properties?.isCircle) {
+    const handle = feature.getCoordinate("0.0");
+    push(
+      createVertex(
+        `${geojson.id}-handle`,
+        handle,
+        "0.0",
+        state.selectedCoordPaths.length > 0
+      )
+    );
+  }
+
   this.fireActionable(state);
 };
 
