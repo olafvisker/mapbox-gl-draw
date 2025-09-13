@@ -25,13 +25,7 @@ DrawCircle.onSetup = function () {
     properties: { isCircle: true, center: [] },
     geometry: {
       type: Constants.geojsonTypes.POLYGON,
-      coordinates: [
-        [
-          [0, 0],
-          [0, 0],
-          [0, 0],
-        ],
-      ],
+      coordinates: [],
     },
   });
 

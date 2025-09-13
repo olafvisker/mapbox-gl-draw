@@ -23,15 +23,7 @@ DrawRectangle.onSetup = function () {
     properties: { isRectangle: true },
     geometry: {
       type: Constants.geojsonTypes.POLYGON,
-      coordinates: [
-        [
-          [0, 0],
-          [0, 0],
-          [0, 0],
-          [0, 0],
-          [0, 0],
-        ],
-      ],
+      coordinates: [],
     },
   });
 
@@ -93,7 +85,6 @@ DrawRectangle.onTap = DrawRectangle.onClick = function (state, e) {
 
 DrawRectangle.onMouseMove = function (state, e) {
   if (!state.startPoint) return;
-
   const startX = state.startPoint[0];
   const startY = state.startPoint[1];
 
@@ -150,6 +141,7 @@ DrawRectangle.toDisplayFeatures = function (state, geojson, display) {
     ? Constants.activeStates.ACTIVE
     : Constants.activeStates.INACTIVE;
   if (!isActive) return display(geojson);
+  if (geojson.geometry.coordinates.length === 0) return;
 
   // Display vertices
   for (let i = 0; i < geojson.geometry.coordinates[0].length - 1; i++) {

@@ -131,10 +131,12 @@ DirectSelect.dragVertex = function (state, e, delta) {
 };
 
 DirectSelect.clickNoTarget = function () {
+  doubleClickZoom.enable(this);
   this.changeMode(Constants.modes.SIMPLE_SELECT);
 };
 
 DirectSelect.clickInactive = function (state, e) {
+  doubleClickZoom.enable(this);
   const featureId = e.featureTarget.properties.id;
   this.changeMode(Constants.modes.SIMPLE_SELECT, { featureIds: [featureId] });
 };
