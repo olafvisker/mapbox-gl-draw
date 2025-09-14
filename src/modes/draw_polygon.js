@@ -22,9 +22,7 @@ DrawPolygon.fireLiveUpdate = function (state) {
 DrawPolygon.onSetup = function () {
   const polygon = this.newFeature({
     type: Constants.geojsonTypes.FEATURE,
-    properties: {
-      modify: Constants.modificationMode.ANCHOR,
-    },
+    properties: {},
     geometry: {
       type: Constants.geojsonTypes.POLYGON,
       coordinates: [[]],

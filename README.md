@@ -34,8 +34,6 @@ Changes in this fork relative to `@mapbox/mapbox-gl-draw`:
 - @turf/distance
 - @turf/center-of-mass
 - @turf/transform-scale
-- @turf/nearest-point-on-line
-- @turf/polygon-to-line
 
 ---
 

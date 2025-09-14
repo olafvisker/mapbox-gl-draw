@@ -13,9 +13,7 @@ import moveFeatures from "../lib/move_features.js";
 import { centerOfMass } from "@turf/center-of-mass";
 import { transformScale } from "@turf/transform-scale";
 import { distance } from "@turf/distance";
-import { point, lineString, polygon } from "@turf/helpers";
-import { nearestPointOnLine } from "@turf/nearest-point-on-line";
-import { polygonToLine } from "@turf/polygon-to-line";
+import { point } from "@turf/helpers";
 
 const isVertex = isOfMetaType(Constants.meta.VERTEX);
 const isMidpoint = isOfMetaType(Constants.meta.MIDPOINT);
@@ -57,23 +55,19 @@ DirectSelect.startDragging = function (state, e) {
 };
 
 function findFarthestPoint(selectedCoord, feature) {
-  let coords = feature.getCoordinates();
-  if (feature.type === Constants.geojsonTypes.POLYGON) coords = coords[0];
+  const coords =
+    feature.type === Constants.geojsonTypes.POLYGON
+      ? feature.getCoordinates()[0]
+      : feature.getCoordinates();
 
-  let maxDist = 0;
-  let farthest = selectedCoord;
-
-  coords.forEach((coord) => {
-    const dist = distance(point(coord), point(selectedCoord), {
-      units: "degrees",
-    });
-    if (dist > maxDist) {
-      maxDist = dist;
-      farthest = coord;
-    }
-  });
-
-  return farthest;
+  return coords.reduce(
+    (farthest, coord) =>
+      distance(coord, selectedCoord, { units: "degrees" }) >
+      distance(farthest, selectedCoord, { units: "degrees" })
+        ? coord
+        : farthest,
+    selectedCoord
+  );
 }
 
 DirectSelect.stopDragging = function (state) {
@@ -176,21 +170,14 @@ DirectSelect.dragVertex = function (state, e, delta) {
 
   if (modify === Constants.modificationMode.CENTER) {
     const center = state.feature.properties._center;
-    const mouse = e.lngLat;
+    const mousePoint = [e.lngLat.lng, e.lngLat.lat];
 
     const originalVertex = state.feature.getCoordinate(
       state.selectedCoordPaths[0]
     );
 
-    const originalVertexPoint = point(originalVertex);
-    const mousePoint = point([mouse.lng, mouse.lat]);
-    const centerPoint = point(center);
-
-    const originalDist = distance(centerPoint, originalVertexPoint, {
-      units: "degrees",
-    });
-    const mouseDist = distance(centerPoint, mousePoint, { units: "degrees" });
-
+    const originalDist = distance(center, originalVertex, { units: "degrees" });
+    const mouseDist = distance(center, mousePoint, { units: "degrees" });
     const scaleFactor = mouseDist / originalDist;
 
     const scaled = transformScale(state.feature.toGeoJSON(), scaleFactor, {
@@ -198,52 +185,34 @@ DirectSelect.dragVertex = function (state, e, delta) {
       mutate: true,
     });
 
-    if (state.feature.type === Constants.geojsonTypes.POLYGON) {
-      state.feature.setCoordinates([
-        scaled.geometry.coordinates[0].slice(0, -1),
-      ]);
-    } else if (state.feature.type === Constants.geojsonTypes.LINE_STRING) {
-      state.feature.setCoordinates(scaled.geometry.coordinates);
-    }
+    const coords = scaled.geometry.coordinates;
+    const isPolygon = state.feature.type === Constants.geojsonTypes.POLYGON;
+    state.feature.setCoordinates(isPolygon ? [coords[0].slice(0, -1)] : coords);
 
     this.fireLiveUpdate();
     return;
   }
 
   if (modify === Constants.modificationMode.ANCHOR) {
-    const selectedCoord = selectedCoords[0];
-
-    // Get all points of the feature
-    let coords = state.feature.getCoordinates();
+    const [selectedX, selectedY] = selectedCoords[0];
+    const coords = state.feature.getCoordinates();
     const isPolygon = state.feature.type === Constants.geojsonTypes.POLYGON;
-    if (isPolygon) coords = coords[0].slice(0, -1); // outer ring
-    // Find the point farthest from the selected coordinate
-    const oppositeCoord = state.feature.properties._anchor;
+    const points = isPolygon ? coords[0].slice(0, -1) : coords;
 
-    // Compute non-uniform scale factors
-    const mouse = e.lngLat;
-    const dxMouse = mouse.lng - selectedCoord[0];
-    const dyMouse = mouse.lat - selectedCoord[1];
+    const [anchorX, anchorY] = state.feature.properties._anchor;
+    const { lng: mouseX, lat: mouseY } = e.lngLat;
 
-    const dxOriginal = selectedCoord[0] - oppositeCoord[0];
-    const dyOriginal = selectedCoord[1] - oppositeCoord[1];
+    const scale = (orig, delta) => (orig + delta) / (orig || 0.1);
 
-    // Avoid division by zero
-    const scaleX = dxOriginal !== 0 ? (dxOriginal + dxMouse) / dxOriginal : 1;
-    const scaleY = dyOriginal !== 0 ? (dyOriginal + dyMouse) / dyOriginal : 1;
+    const scaleX = scale(selectedX - anchorX, mouseX - selectedX);
+    const scaleY = scale(selectedY - anchorY, mouseY - selectedY);
 
-    // Apply non-uniform scaling to all coordinates
-    const scaledCoords = coords.map(([x, y]) => [
-      oppositeCoord[0] + (x - oppositeCoord[0]) * scaleX,
-      oppositeCoord[1] + (y - oppositeCoord[1]) * scaleY,
+    const scaledCoords = points.map(([x, y]) => [
+      anchorX + (x - anchorX) * scaleX,
+      anchorY + (y - anchorY) * scaleY,
     ]);
 
-    // Update the feature
-    if (isPolygon) {
-      state.feature.setCoordinates([scaledCoords]);
-    } else {
-      state.feature.setCoordinates(scaledCoords);
-    }
+    state.feature.setCoordinates(isPolygon ? [scaledCoords] : scaledCoords);
 
     this.fireLiveUpdate();
     return;
