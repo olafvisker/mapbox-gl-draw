@@ -216,8 +216,7 @@ DirectSelect.dragVertex = function (state, e, delta) {
     // Get all points of the feature
     let coords = state.feature.getCoordinates();
     const isPolygon = state.feature.type === Constants.geojsonTypes.POLYGON;
-    if (isPolygon) coords = coords[0]; // outer ring
-
+    if (isPolygon) coords = coords[0].slice(0, -1); // outer ring
     // Find the point farthest from the selected coordinate
     const oppositeCoord = state.feature.properties._anchor;
 
