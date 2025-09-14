@@ -57,8 +57,8 @@ DirectSelect.startDragging = function (state, e) {
 function findFarthestPoint(selectedCoord, feature) {
   const coords =
     feature.type === Constants.geojsonTypes.POLYGON
-      ? feature.getCoordinates()[0]
-      : feature.getCoordinates();
+      ? feature.coordinates[0]
+      : feature.coordinates;
 
   return coords.reduce(
     (farthest, coord) =>
@@ -194,18 +194,31 @@ DirectSelect.dragVertex = function (state, e, delta) {
   }
 
   if (modify === Constants.modificationMode.ANCHOR) {
-    const [selectedX, selectedY] = selectedCoords[0];
-    const coords = state.feature.getCoordinates();
-    const isPolygon = state.feature.type === Constants.geojsonTypes.POLYGON;
-    const points = isPolygon ? coords[0].slice(0, -1) : coords;
-
     const [anchorX, anchorY] = state.feature.properties._anchor;
-    const { lng: mouseX, lat: mouseY } = e.lngLat;
+    const [selectedX, selectedY] = selectedCoords[0];
 
-    const scale = (orig, delta) => (orig + delta) / (orig || 0.1);
+    let origDistX = selectedX - anchorX;
+    let origDistY = selectedY - anchorY;
 
-    const scaleX = scale(selectedX - anchorX, mouseX - selectedX);
-    const scaleY = scale(selectedY - anchorY, mouseY - selectedY);
+    if (origDistX === 0) origDistX = 1;
+    if (origDistY === 0) origDistY = 1;
+
+    const mouseX = e.lngLat.lng;
+    const mouseY = e.lngLat.lat;
+
+    let scaleX = (mouseX - anchorX) / origDistX;
+    let scaleY = (mouseY - anchorY) / origDistY;
+
+    const minScale = 0.01;
+    if (scaleX >= 0) scaleX = Math.max(scaleX, minScale);
+    else scaleX = Math.min(scaleX, -minScale);
+
+    if (scaleY >= 0) scaleY = Math.max(scaleY, minScale);
+    else scaleY = Math.min(scaleY, -minScale);
+
+    const coords = state.feature.coordinates;
+    const isPolygon = state.feature.type === Constants.geojsonTypes.POLYGON;
+    const points = isPolygon ? coords[0] : coords;
 
     const scaledCoords = points.map(([x, y]) => [
       anchorX + (x - anchorX) * scaleX,
@@ -213,7 +226,6 @@ DirectSelect.dragVertex = function (state, e, delta) {
     ]);
 
     state.feature.setCoordinates(isPolygon ? [scaledCoords] : scaledCoords);
-
     this.fireLiveUpdate();
     return;
   }
