@@ -22,7 +22,12 @@ DrawCircle.fireLiveUpdate = function (state) {
 DrawCircle.onSetup = function () {
   const circle = this.newFeature({
     type: Constants.geojsonTypes.FEATURE,
-    properties: { isCircle: true, center: [] },
+    properties: {
+      modify: Constants.modificationMode.CENTER,
+      midpoints: false,
+      vertices: 3,
+      vertexDelete: Constants.vertexDeletionStrategy.DELETE_FEATURE,
+    },
     geometry: {
       type: Constants.geojsonTypes.POLYGON,
       coordinates: [],
@@ -53,7 +58,6 @@ DrawCircle.clickAnywhere = function (state, e) {
 
     const marker = this.newFeature({
       type: Constants.geojsonTypes.FEATURE,
-      properties: { isCenter: true },
       geometry: {
         type: Constants.geojsonTypes.POINT,
         coordinates: state.center,
@@ -71,10 +75,12 @@ DrawCircle.clickAnywhere = function (state, e) {
   const circleFeature = circle(state.center, state.radiusMeters, {
     steps: 64,
     units: "meters",
-    properties: { isCircle: true, center: state.center },
+    properties: {},
   });
 
-  state.circle.setCoordinates(circleFeature.geometry.coordinates);
+  state.circle.setCoordinates([
+    circleFeature.geometry.coordinates[0].slice(0, -1),
+  ]); // Polygon feature expects invalid polygon (last coordinate not duplicated). Turf generates a valid polygon so we remove the last element.
 
   this.changeMode(Constants.modes.SIMPLE_SELECT, {
     featureIds: [state.circle.id],
@@ -94,10 +100,12 @@ DrawCircle.onMouseMove = function (state, e) {
   const circleFeature = circle(state.center, state.radiusMeters, {
     steps: 64,
     units: "meters",
-    properties: { isCircle: true, center: state.center },
+    properties: {},
   });
 
-  state.circle.setCoordinates(circleFeature.geometry.coordinates);
+  state.circle.setCoordinates([
+    circleFeature.geometry.coordinates[0].slice(0, -1),
+  ]); // Polygon feature expects invalid polygon (last coordinate not duplicated). Turf generates a valid polygon so we remove the last element.
   this.fireLiveUpdate(state);
 };
 

@@ -94,6 +94,16 @@ export const interactions = [
   "touchZoomRotate",
 ];
 
+export const modificationMode = {
+  CENTER: "modify_center",
+  ANCHOR: "modify_anchor",
+};
+
+export const vertexDeletionStrategy = {
+  TO_DEFAULT: "vertex_delete_to_default",
+  DELETE_FEATURE: "vertex_delete_delete_feature",
+};
+
 export const LAT_MIN = -90;
 export const LAT_RENDERED_MIN = -85;
 export const LAT_MAX = 90;

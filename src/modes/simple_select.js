@@ -424,27 +424,4 @@ SimpleSelect.onUncombineFeatures = function () {
   this.fireActionable();
 };
 
-// --- PATCH SimpleSelect for circles ---
-
-SimpleSelect.dragMove = function (state, e) {
-  state.dragMoving = true;
-  e.originalEvent.stopPropagation();
-
-  const delta = {
-    lng: e.lngLat.lng - state.dragMoveLocation.lng,
-    lat: e.lngLat.lat - state.dragMoveLocation.lat,
-  };
-
-  moveFeatures(this.getSelected(), delta);
-
-  this.getSelected()
-    .filter((feature) => feature.properties.isCircle)
-    .map((circle) => circle.properties.center)
-    .forEach((center) => {
-      center[0] += delta.lng;
-      center[1] += delta.lat;
-    });
-
-  state.dragMoveLocation = e.lngLat;
-};
 export default SimpleSelect;

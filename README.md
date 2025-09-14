@@ -2,13 +2,20 @@
 
 Changes in this fork relative to `@mapbox/mapbox-gl-draw`:
 
-- **DirectSelect & SimpleSelect**: Fire `draw.update.live` while dragging vertices or features.
-- **DrawLineString & DrawPolygon**: Fire `draw.update.live` during vertex movement.
-- **StaticMode**: Added a static mode that displays data stored in Draw but disabled all user feature interaction.
+- **StaticMode**: Added a static mode that displays data stored in Draw but disables all user feature interaction.
+- **Draw Circle & Draw Rectangle**: Added `draw_rectangle` and `draw_circle` modes for drawing rectangles and geodesic circles.
+- **DirectSelect, SimpleSelect & Draw modes**: Fire `draw.update.live` while dragging/drawing features and when editing vertices.
 - **DirectSelect**: Dragging a feature now automatically deselects any previously selected vertex, enabling immediate movement of the entire feature without requiring manual vertex deselection.
-- **New Modes**: Added draw_rectangle and draw_circle modes for drawing rectangles and geodesic circles. Deleting a vertex from the circle deletes the entire circle. Deleting a vertex from a rectangle turns it into a normal polygon.
-- **DirectSelect & SimpleSelect**: Updated to account for proper circle and rectangle editing (currently monkey patched, should do proper integration).
-- Updated debug/index.html to account for new modes.
+- **DirectSelect**: Added **modification modes** (can be set via the feature property `modify`):
+  - `modify_center` — scales the feature uniformly from its center.
+  - `modify_anchor` — scales the feature non-uniformly from the vertex opposite the selected one.
+- **DirectSelect**: Added **vertex deletion strategies** (can be set via the feature property `vertexDelete`):
+  - `vertex_delete_to_default` — resets vertex-related properties to default (e.g. rectangle becomes a normal polygon on vertex deletion).
+  - `vertex_delete_delete_feature` — deletes the entire feature when a vertex is removed.
+- **DirectSelect**: Enhanced **supplementary points handling** with `midpoints` and `vertices` properties:
+  - Both are `true` by default.
+  - Can be set to `false` to hide points or to a **number** to draw only that many vertices evenly distributed along the feature.
+- Updated `debug/index.html` to account for new modes.
 
 **Merged upstream pull requests that fixed the following:**
 
@@ -25,6 +32,10 @@ Changes in this fork relative to `@mapbox/mapbox-gl-draw`:
 
 - @turf/circle
 - @turf/distance
+- @turf/center-of-mass
+- @turf/transform-scale
+- @turf/nearest-point-on-line
+- @turf/polygon-to-line
 
 ---
 

@@ -20,7 +20,11 @@ DrawRectangle.fireLiveUpdate = function (state) {
 DrawRectangle.onSetup = function () {
   const rectangle = this.newFeature({
     type: Constants.geojsonTypes.FEATURE,
-    properties: { isRectangle: true },
+    properties: {
+      modify: Constants.modificationMode.ANCHOR,
+      midpoints: false,
+      vertexDelete: Constants.vertexDeletionStrategy.TO_DEFAULT,
+    },
     geometry: {
       type: Constants.geojsonTypes.POLYGON,
       coordinates: [],
@@ -51,7 +55,7 @@ DrawRectangle.clickAnywhere = function (state, e) {
     // Create start point marker
     const marker = this.newFeature({
       type: Constants.geojsonTypes.FEATURE,
-      properties: { isStartPoint: true },
+      properties: {},
       geometry: {
         type: Constants.geojsonTypes.POINT,
         coordinates: [e.lngLat.lng, e.lngLat.lat],

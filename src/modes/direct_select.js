@@ -10,7 +10,12 @@ import constrainFeatureMovement from "../lib/constrain_feature_movement.js";
 import doubleClickZoom from "../lib/double_click_zoom.js";
 import * as Constants from "../constants.js";
 import moveFeatures from "../lib/move_features.js";
-import { circle } from "@turf/circle";
+import { centerOfMass } from "@turf/center-of-mass";
+import { transformScale } from "@turf/transform-scale";
+import { distance } from "@turf/distance";
+import { point, lineString, polygon } from "@turf/helpers";
+import { nearestPointOnLine } from "@turf/nearest-point-on-line";
+import { polygonToLine } from "@turf/polygon-to-line";
 
 const isVertex = isOfMetaType(Constants.meta.VERTEX);
 const isMidpoint = isOfMetaType(Constants.meta.MIDPOINT);
@@ -51,6 +56,26 @@ DirectSelect.startDragging = function (state, e) {
   state.dragMoveLocation = e.lngLat;
 };
 
+function findFarthestPoint(selectedCoord, feature) {
+  let coords = feature.getCoordinates();
+  if (feature.type === Constants.geojsonTypes.POLYGON) coords = coords[0];
+
+  let maxDist = 0;
+  let farthest = selectedCoord;
+
+  coords.forEach((coord) => {
+    const dist = distance(point(coord), point(selectedCoord), {
+      units: "degrees",
+    });
+    if (dist > maxDist) {
+      maxDist = dist;
+      farthest = coord;
+    }
+  });
+
+  return farthest;
+}
+
 DirectSelect.stopDragging = function (state) {
   if (state.canDragMove && state.initialDragPanState === true) {
     this.map.dragPan.enable();
@@ -60,10 +85,14 @@ DirectSelect.stopDragging = function (state) {
   state.dragMoving = false;
   state.canDragMove = false;
   state.dragMoveLocation = null;
+
+  delete state.feature.properties._center;
+  delete state.feature.properties._anchor;
 };
 
 DirectSelect.onVertex = function (state, e) {
   this.startDragging(state, e);
+
   const about = e.featureTarget.properties;
   const selectedIndex = state.selectedCoordPaths.indexOf(about.coord_path);
   if (!isShiftDown(e) && selectedIndex === -1) {
@@ -77,6 +106,21 @@ DirectSelect.onVertex = function (state, e) {
     state.selectedCoordPaths
   );
   this.setSelectedCoordinates(selectedCoordinates);
+
+  const modify = state.feature.properties.modify;
+  if (modify === Constants.modificationMode.CENTER) {
+    const result = centerOfMass(state.feature);
+    const center = result.geometry.coordinates;
+    state.feature.properties._center = center;
+  } else if (modify === Constants.modificationMode.ANCHOR) {
+    const selectedCoord = state.feature.getCoordinate(
+      state.selectedCoordPaths[0]
+    );
+    state.feature.properties._anchor = findFarthestPoint(
+      selectedCoord,
+      state.feature
+    );
+  }
 };
 
 DirectSelect.onMidpoint = function (state, e) {
@@ -85,6 +129,21 @@ DirectSelect.onMidpoint = function (state, e) {
   state.feature.addCoordinate(about.coord_path, about.lng, about.lat);
   this.fireUpdate();
   state.selectedCoordPaths = [about.coord_path];
+
+  const modify = state.feature.properties.modify;
+  if (modify === Constants.modificationMode.CENTER) {
+    const result = centerOfMass(state.feature);
+    const center = result.geometry.coordinates;
+    state.feature.properties._center = center;
+  } else if (modify === Constants.modificationMode.ANCHOR) {
+    const selectedCoord = state.feature.getCoordinate(
+      state.selectedCoordPaths[0]
+    );
+    state.feature.properties._anchor = findFarthestPoint(
+      selectedCoord,
+      state.feature
+    );
+  }
 };
 
 DirectSelect.pathsToCoordinates = function (featureId, paths) {
@@ -104,12 +163,93 @@ DirectSelect.onFeature = function (state, e) {
 DirectSelect.dragFeature = function (state, e, delta) {
   moveFeatures(this.getSelected(), delta);
   state.dragMoveLocation = e.lngLat;
+  this.fireLiveUpdate();
 };
 
 DirectSelect.dragVertex = function (state, e, delta) {
+  state.vertexDragMoveLocation = e.lngLat;
+  const modify = state.feature.properties.modify;
+
   const selectedCoords = state.selectedCoordPaths.map((coord_path) =>
     state.feature.getCoordinate(coord_path)
   );
+
+  if (modify === Constants.modificationMode.CENTER) {
+    const center = state.feature.properties._center;
+    const mouse = e.lngLat;
+
+    const originalVertex = state.feature.getCoordinate(
+      state.selectedCoordPaths[0]
+    );
+
+    const originalVertexPoint = point(originalVertex);
+    const mousePoint = point([mouse.lng, mouse.lat]);
+    const centerPoint = point(center);
+
+    const originalDist = distance(centerPoint, originalVertexPoint, {
+      units: "degrees",
+    });
+    const mouseDist = distance(centerPoint, mousePoint, { units: "degrees" });
+
+    const scaleFactor = mouseDist / originalDist;
+
+    const scaled = transformScale(state.feature.toGeoJSON(), scaleFactor, {
+      origin: center,
+      mutate: true,
+    });
+
+    if (state.feature.type === Constants.geojsonTypes.POLYGON) {
+      state.feature.setCoordinates([
+        scaled.geometry.coordinates[0].slice(0, -1),
+      ]);
+    } else if (state.feature.type === Constants.geojsonTypes.LINE_STRING) {
+      state.feature.setCoordinates(scaled.geometry.coordinates);
+    }
+
+    this.fireLiveUpdate();
+    return;
+  }
+
+  if (modify === Constants.modificationMode.ANCHOR) {
+    const selectedCoord = selectedCoords[0];
+
+    // Get all points of the feature
+    let coords = state.feature.getCoordinates();
+    const isPolygon = state.feature.type === Constants.geojsonTypes.POLYGON;
+    if (isPolygon) coords = coords[0]; // outer ring
+
+    // Find the point farthest from the selected coordinate
+    const oppositeCoord = state.feature.properties._anchor;
+
+    // Compute non-uniform scale factors
+    const mouse = e.lngLat;
+    const dxMouse = mouse.lng - selectedCoord[0];
+    const dyMouse = mouse.lat - selectedCoord[1];
+
+    const dxOriginal = selectedCoord[0] - oppositeCoord[0];
+    const dyOriginal = selectedCoord[1] - oppositeCoord[1];
+
+    // Avoid division by zero
+    const scaleX = dxOriginal !== 0 ? (dxOriginal + dxMouse) / dxOriginal : 1;
+    const scaleY = dyOriginal !== 0 ? (dyOriginal + dyMouse) / dyOriginal : 1;
+
+    // Apply non-uniform scaling to all coordinates
+    const scaledCoords = coords.map(([x, y]) => [
+      oppositeCoord[0] + (x - oppositeCoord[0]) * scaleX,
+      oppositeCoord[1] + (y - oppositeCoord[1]) * scaleY,
+    ]);
+
+    // Update the feature
+    if (isPolygon) {
+      state.feature.setCoordinates([scaledCoords]);
+    } else {
+      state.feature.setCoordinates(scaledCoords);
+    }
+
+    this.fireLiveUpdate();
+    return;
+  }
+
   const selectedCoordPoints = selectedCoords.map((coords) => ({
     type: Constants.geojsonTypes.FEATURE,
     properties: {},
@@ -128,6 +268,8 @@ DirectSelect.dragVertex = function (state, e, delta) {
       coord[1] + constrainedDelta.lat
     );
   }
+
+  this.fireLiveUpdate();
 };
 
 DirectSelect.clickNoTarget = function () {
@@ -167,6 +309,7 @@ DirectSelect.onSetup = function (opts) {
     dragMoving: false,
     canDragMove: false,
     selectedCoordPaths: opts.coordPath ? [opts.coordPath] : [],
+    vertexDragMoveLocation: null,
   };
 
   this.setSelected(featureId);
@@ -188,22 +331,78 @@ DirectSelect.onStop = function () {
 };
 
 DirectSelect.toDisplayFeatures = function (state, geojson, push) {
-  if (state.featureId === geojson.properties.id) {
-    geojson.properties.active = Constants.activeStates.ACTIVE;
-    push(geojson);
-    createSupplementaryPoints(geojson, {
-      map: this.map,
-      midpoints: true,
-      selectedPaths: state.selectedCoordPaths,
-    }).forEach(push);
-  } else {
-    geojson.properties.active = Constants.activeStates.INACTIVE;
-    push(geojson);
+  const { midpoints: midpointsOption, vertices: verticesOption } =
+    state.feature.properties;
+  const isActive = state.featureId === geojson.properties.id;
+
+  geojson.properties.active = isActive
+    ? Constants.activeStates.ACTIVE
+    : Constants.activeStates.INACTIVE;
+
+  push(geojson); // always push main feature first
+
+  if (!isActive) {
+    this.fireActionable(state);
+    return;
   }
+
+  const drawMidpoints =
+    midpointsOption === undefined ||
+    midpointsOption === true ||
+    midpointsOption > 0;
+  const drawVertices =
+    verticesOption === undefined ||
+    verticesOption === true ||
+    verticesOption > 0;
+  if (!drawMidpoints && !drawVertices) return;
+
+  const supplementaryPoints = createSupplementaryPoints(geojson, {
+    map: this.map,
+    midpoints: drawMidpoints,
+    selectedPaths: state.selectedCoordPaths,
+  });
+
+  const midpoints = drawMidpoints
+    ? supplementaryPoints.filter(
+        (p) => p.properties.meta === Constants.meta.MIDPOINT
+      )
+    : [];
+
+  let vertices = drawVertices
+    ? supplementaryPoints.filter(
+        (p) => p.properties.meta !== Constants.meta.MIDPOINT
+      )
+    : [];
+
+  if (typeof verticesOption === "number") {
+    const step = vertices.length / verticesOption;
+    vertices = Array.from(
+      { length: verticesOption },
+      (_, i) => vertices[Math.floor(i * step) % vertices.length]
+    );
+  }
+
+  [...midpoints, ...vertices].forEach(push);
+
   this.fireActionable(state);
 };
 
 DirectSelect.onTrash = function (state) {
+  const deleteStrategy = state.feature.properties.vertexDelete;
+
+  if (deleteStrategy === Constants.vertexDeletionStrategy.DELETE_FEATURE) {
+    this.deleteFeature([state.featureId]);
+    this.changeMode(Constants.modes.SIMPLE_SELECT, {});
+    return;
+  }
+
+  if (deleteStrategy === Constants.vertexDeletionStrategy.TO_DEFAULT) {
+    delete state.feature.properties.vertices;
+    delete state.feature.properties.midpoints;
+    delete state.feature.properties.vertexDelete;
+    delete state.feature.properties.modify;
+  }
+
   if (state.selectedCoordPaths.length === 0) {
     this.deleteFeature([state.featureId]);
     this.changeMode(Constants.modes.SIMPLE_SELECT, {});
@@ -230,6 +429,7 @@ DirectSelect.onMouseMove = function (state, e) {
   const onVertex = isVertex(e);
   const isMidPoint = isMidpoint(e);
   const noCoords = state.selectedCoordPaths.length === 0;
+
   if (isActiveFeature(e) && noCoords)
     this.updateUIClasses({ mouse: Constants.cursors.MOVE });
   else if (onVertex && !noCoords)
@@ -284,6 +484,7 @@ DirectSelect.onClick = function (state, e) {
   if (noTarget(e)) return this.clickNoTarget(state, e);
   if (isActiveFeature(e)) return this.clickActiveFeature(state, e);
   if (isInactiveFeature(e)) return this.clickInactive(state, e);
+
   this.stopDragging(state);
 };
 
@@ -298,179 +499,6 @@ DirectSelect.onTouchEnd = DirectSelect.onMouseUp = function (state) {
     this.fireUpdate();
   }
   this.stopDragging(state);
-};
-
-// Unified dragVertex
-const originalDragVertex = DirectSelect.dragVertex;
-DirectSelect.dragVertex = function (state, e, delta) {
-  const feature = state.feature;
-  const isRectangle = feature?.properties?.isRectangle;
-  const isCircle = feature?.properties?.isCircle;
-
-  const selectedCoords = state.selectedCoordPaths.map((coord_path) =>
-    feature.getCoordinate(coord_path)
-  );
-
-  // --- CIRCLE RESIZE ---
-  if (isCircle && state.selectedCoordPaths.length === 1) {
-    const center = feature.properties.center;
-    if (!center) return;
-
-    const mouse = e.lngLat;
-    const dx = mouse.lng - center[0];
-    const dy = mouse.lat - center[1];
-    const newRadius = Math.sqrt(dx * dx + dy * dy);
-
-    const newCircle = circle(center, newRadius, {
-      steps: 64,
-      units: "degrees",
-      properties: { isCircle: true, center },
-    });
-
-    feature.setCoordinates(newCircle.geometry.coordinates);
-    this.fireLiveUpdate();
-  }
-
-  // --- RECTANGLE VERTEX DRAG ---
-  if (isRectangle && state.selectedCoordPaths.length === 1) {
-    const path = state.selectedCoordPaths[0];
-
-    if (path === "0.0") {
-      feature.updateCoordinate(
-        "0.1",
-        feature.getCoordinate("0.1")[0],
-        selectedCoords[0][1]
-      );
-      feature.updateCoordinate(
-        "0.3",
-        selectedCoords[0][0],
-        feature.getCoordinate("0.3")[1]
-      );
-    } else if (path === "0.1") {
-      feature.updateCoordinate(
-        "0.0",
-        feature.getCoordinate("0.0")[0],
-        selectedCoords[0][1]
-      );
-      feature.updateCoordinate(
-        "0.2",
-        selectedCoords[0][0],
-        feature.getCoordinate("0.2")[1]
-      );
-    } else if (path === "0.2") {
-      feature.updateCoordinate(
-        "0.3",
-        feature.getCoordinate("0.3")[0],
-        selectedCoords[0][1]
-      );
-      feature.updateCoordinate(
-        "0.1",
-        selectedCoords[0][0],
-        feature.getCoordinate("0.1")[1]
-      );
-    } else if (path === "0.3") {
-      feature.updateCoordinate(
-        "0.2",
-        feature.getCoordinate("0.2")[0],
-        selectedCoords[0][1]
-      );
-      feature.updateCoordinate(
-        "0.0",
-        selectedCoords[0][0],
-        feature.getCoordinate("0.0")[1]
-      );
-    }
-  }
-
-  // fallback
-  originalDragVertex.call(this, state, e, delta);
-};
-
-// Unified dragFeature
-DirectSelect.dragFeature = function (state, e, delta) {
-  const feature = state.feature;
-  const isCircle = feature?.properties?.isCircle;
-
-  moveFeatures([feature], delta);
-
-  if (isCircle && feature.properties.center) {
-    feature.properties.center = [
-      feature.properties.center[0] + delta.lng,
-      feature.properties.center[1] + delta.lat,
-    ];
-  }
-
-  state.dragMoveLocation = e.lngLat;
-  this.fireLiveUpdate();
-};
-import createVertex from "../lib/create_vertex.js";
-
-const originalOnTrash = DirectSelect.onTrash;
-DirectSelect.onTrash = function (state) {
-  const feature = state.feature;
-  const isCircle = feature?.properties?.isCircle;
-  const isRectangle = feature?.properties?.isRectangle;
-  // If the feature is a circle, delete it entirely
-  if (isCircle) {
-    this.deleteFeature([state.featureId]);
-    this.changeMode(Constants.modes.SIMPLE_SELECT, {});
-    return;
-  }
-
-  if (isRectangle && state.selectedCoordPaths.length > 0) {
-    delete state.feature.properties.isRectangle;
-  }
-
-  // Otherwise, fallback to the original onTrash behavior
-  originalOnTrash.call(this, state);
-};
-
-DirectSelect.toDisplayFeatures = function (state, geojson, push) {
-  const feature = state.feature;
-  const isActive = state.featureId === geojson.properties.id;
-  geojson.properties.active = isActive
-    ? Constants.activeStates.ACTIVE
-    : Constants.activeStates.INACTIVE;
-
-  push(geojson); // always push main feature first
-
-  if (!isActive) {
-    this.fireActionable(state);
-    return;
-  }
-
-  // Generic supplementary points (polygons, multi-polygons)
-  if (!feature?.properties?.isRectangle && !feature?.properties?.isCircle) {
-    createSupplementaryPoints(geojson, {
-      map: this.map,
-      midpoints: true,
-      selectedPaths: state.selectedCoordPaths,
-    }).forEach(push);
-  }
-
-  // Rectangle vertices (without midpoints)
-  if (feature?.properties?.isRectangle) {
-    createSupplementaryPoints(geojson, {
-      map: this.map,
-      midpoints: false,
-      selectedPaths: state.selectedCoordPaths,
-    }).forEach(push);
-  }
-
-  // Circle handle
-  if (feature?.properties?.isCircle) {
-    const handle = feature.getCoordinate("0.0");
-    push(
-      createVertex(
-        `${geojson.id}-handle`,
-        handle,
-        "0.0",
-        state.selectedCoordPaths.length > 0
-      )
-    );
-  }
-
-  this.fireActionable(state);
 };
 
 export default DirectSelect;
